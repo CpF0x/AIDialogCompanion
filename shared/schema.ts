@@ -34,12 +34,30 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   isUser: boolean("is_user").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  metadata: text("metadata"), // 存储模型信息的JSON字符串
 });
 
 export const insertMessageSchema = createInsertSchema(messages).pick({
   chatId: true,
   content: true,
   isUser: true,
+  metadata: true,
+});
+
+// AI Models
+export const aiModels = pgTable("ai_models", {
+  id: serial("id").primaryKey(),
+  modelId: text("model_id").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  active: boolean("active").notNull().default(true),
+});
+
+export const insertAiModelSchema = createInsertSchema(aiModels).pick({
+  modelId: true,
+  name: true,
+  description: true,
+  active: true,
 });
 
 // Feature cards
@@ -64,5 +82,18 @@ export type InsertChat = z.infer<typeof insertChatSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
+export type AiModel = typeof aiModels.$inferSelect;
+export type InsertAiModel = z.infer<typeof insertAiModelSchema>;
+
 export type FeatureCard = typeof featureCards.$inferSelect;
 export type InsertFeatureCard = z.infer<typeof insertFeatureCardSchema>;
+
+// 额外的接口定义
+export interface ModelInfo {
+  id: string;
+  name: string;
+}
+
+export interface MessageWithModel extends Message {
+  model?: ModelInfo;
+}

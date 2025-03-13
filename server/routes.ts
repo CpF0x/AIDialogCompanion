@@ -1,13 +1,23 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertChatSchema, insertMessageSchema } from "@shared/schema";
-import { generateDeepSeekResponse } from "./deepseek";
+import { insertChatSchema, insertMessageSchema, MessageWithModel } from "@shared/schema";
+import { generateDeepSeekResponse, getAvailableModels } from "./deepseek";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // API routes
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+  
+  // 模型API
+  app.get("/api/models", async (_req, res) => {
+    try {
+      const models = await getAvailableModels();
+      res.json(models);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch AI models" });
+    }
   });
   
   // Feature cards
@@ -76,7 +86,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const messages = await storage.getMessagesByChatId(chatId);
-      res.json(messages);
+      
+      // 解析消息元数据，提取模型信息
+      const messagesWithModel: MessageWithModel[] = messages.map(message => {
+        if (message.metadata) {
+          try {
+            const metadata = JSON.parse(message.metadata);
+            return {
+              ...message,
+              model: metadata.model
+            };
+          } catch (e) {
+            return message;
+          }
+        }
+        return message;
+      });
+      
+      res.json(messagesWithModel);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch messages" });
     }
@@ -89,38 +116,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid chat ID" });
       }
       
-      const result = insertMessageSchema.safeParse({ ...req.body, chatId });
+      const { content, modelId } = req.body;
       
-      if (!result.success) {
-        return res.status(400).json({ error: "Invalid message data" });
+      if (!content) {
+        return res.status(400).json({ error: "Content is required" });
       }
       
-      // Create user message
-      const userMessage = await storage.createMessage(result.data);
+      // 创建用户消息
+      const userMessage = await storage.createMessage({
+        chatId,
+        content,
+        isUser: true
+      });
       
       try {
-        // 使用 DeepSeek API 生成回复
-        const aiResponse = await generateDeepSeekResponse(req.body.content);
+        // 使用选定的模型生成AI回复
+        const aiResponse = await generateDeepSeekResponse(content, modelId);
         
-        // 保存 AI 回复消息
+        // 保存AI回复消息，包含模型信息
         const aiMessage = await storage.createMessage({
           chatId,
-          content: aiResponse,
+          content: aiResponse.response,
+          isUser: false,
+          metadata: JSON.stringify({ model: aiResponse.model })
+        });
+        
+        res.status(201).json({ 
+          userMessage, 
+          aiMessage: {
+            ...aiMessage,
+            model: aiResponse.model
+          }
+        });
+      } catch (error) {
+        console.error('生成 AI 回复时出错:', error);
+        // 即使 AI 回复生成失败，仍然返回用户消息
+        const aiMessage = await storage.createMessage({
+          chatId,
+          content: "抱歉，生成回复时出现问题。请稍后再试。",
           isUser: false
         });
         
         res.status(201).json({ userMessage, aiMessage });
-      } catch (error) {
-        console.error('生成 AI 回复时出错:', error);
-        // 即使 AI 回复生成失败，仍然返回用户消息
-        res.status(201).json({ 
-          userMessage, 
-          aiMessage: await storage.createMessage({
-            chatId,
-            content: "抱歉，生成回复时出现问题。请稍后再试。",
-            isUser: false
-          })
-        });
       }
     } catch (error) {
       res.status(500).json({ error: "Failed to create message" });
@@ -130,5 +167,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
-
 
