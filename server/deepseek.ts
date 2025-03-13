@@ -1,31 +1,33 @@
 import axios from 'axios';
 
-// 火山引擎 DeepSeek API 地址
-const VOLCENGINE_DEEPSEEK_API_URL = 'https://universal-engine.volces.com/api/v1/completions';
+// 火山方舟 API 地址
+const VOLCENGINE_ARK_API_URL = 'https://ark.cn-beijing.volces.com/api/v3';
 
 interface DeepSeekMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
-interface VolcengineDeepSeekCompletionParams {
+interface ArkChatCompletionParams {
   model: string;
   messages: DeepSeekMessage[];
-  max_tokens?: number;
   temperature?: number;
+  max_tokens?: number;
   top_p?: number;
-  stream?: boolean;
 }
 
-interface VolcengineDeepSeekResponse {
+interface ArkChatCompletionResponse {
   id: string;
   object: string;
   created: number;
   model: string;
   choices: {
-    index: number;
-    message: DeepSeekMessage;
+    message: {
+      role: string;
+      content: string;
+    };
     finish_reason: string;
+    index: number;
   }[];
   usage: {
     prompt_tokens: number;
@@ -35,7 +37,7 @@ interface VolcengineDeepSeekResponse {
 }
 
 /**
- * 使用火山引擎的 DeepSeek API 生成回复
+ * 使用火山方舟 API 生成回复
  * @param userMessage 用户消息
  * @returns 生成的回复文本
  */
@@ -44,12 +46,12 @@ export async function generateDeepSeekResponse(userMessage: string): Promise<str
     const apiKey = process.env.DEEPSEEK_API_KEY;
     
     if (!apiKey) {
-      console.error('火山引擎 DeepSeek API 密钥缺失。请设置 DEEPSEEK_API_KEY 环境变量。');
+      console.error('火山方舟 API 密钥缺失。请设置 DEEPSEEK_API_KEY 环境变量。');
       return "抱歉，AI 服务目前无法使用。请稍后再试。";
     }
 
-    const params: VolcengineDeepSeekCompletionParams = {
-      model: "deepseek-chat",
+    const params: ArkChatCompletionParams = {
+      model: "deepseek-chat", // 火山方舟的模型名称
       messages: [
         { 
           role: "system", 
@@ -62,12 +64,12 @@ export async function generateDeepSeekResponse(userMessage: string): Promise<str
       ],
       temperature: 0.7,
       max_tokens: 2000,
-      top_p: 0.95,
-      stream: false
+      top_p: 0.95
     };
 
-    const response = await axios.post<VolcengineDeepSeekResponse>(
-      VOLCENGINE_DEEPSEEK_API_URL,
+    // 使用火山方舟 API
+    const response = await axios.post<ArkChatCompletionResponse>(
+      `${VOLCENGINE_ARK_API_URL}/chat/completions`,
       params,
       {
         headers: {
@@ -80,7 +82,7 @@ export async function generateDeepSeekResponse(userMessage: string): Promise<str
     // 返回 AI 助手的回复内容
     return response.data.choices[0].message.content;
   } catch (error) {
-    console.error('火山引擎 DeepSeek API 调用失败:', error);
+    console.error('火山方舟 API 调用失败:', error);
     
     if (axios.isAxiosError(error)) {
       console.error('错误详情:', error.response?.data);
