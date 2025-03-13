@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
 import { queryClient } from "./queryClient";
-import { Chat, Message } from "./types";
+import { Chat, Message, Model } from "./types";
 
 // Hook for handling sidebar visibility on mobile
 export function useSidebar() {
@@ -13,6 +13,30 @@ export function useSidebar() {
   };
   
   return { isSidebarOpen, toggleSidebar };
+}
+
+// Hook for fetching available AI models
+export function useAvailableModels() {
+  return useQuery<Model[]>({
+    queryKey: ["/api/models"],
+    staleTime: 3600000, // 1 hour
+  });
+}
+
+// Hook for stored selected model
+export function useSelectedModel() {
+  const [selectedModelId, setSelectedModelId] = useState<string>(() => {
+    // 从本地存储中恢复上次选择的模型（如果有）
+    const savedModel = localStorage.getItem("selectedModelId");
+    return savedModel || "deepseek-r1-250120"; // 使用默认模型
+  });
+  
+  useEffect(() => {
+    // 当选择的模型ID改变时，保存到本地存储
+    localStorage.setItem("selectedModelId", selectedModelId);
+  }, [selectedModelId]);
+  
+  return { selectedModelId, setSelectedModelId };
 }
 
 // Hook for chat creation
@@ -33,10 +57,10 @@ export function useCreateChat() {
 // Hook for sending messages
 export function useSendMessage(chatId: number) {
   const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ content, modelId }: { content: string; modelId?: string }) => {
       const response = await apiRequest("POST", `/api/chats/${chatId}/messages`, {
         content,
-        isUser: true
+        modelId
       });
       return response.json();
     },

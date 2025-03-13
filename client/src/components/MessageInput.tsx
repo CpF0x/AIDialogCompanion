@@ -2,15 +2,18 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PaperclipIcon, ImageIcon, SendIcon, FileTextIcon } from "lucide-react";
+import ModelSelector from "./ModelSelector";
+import { useSelectedModel } from "@/lib/hooks";
 
 interface MessageInputProps {
-  onSendMessage: (message: string) => void;
+  onSendMessage: (params: { content: string; modelId?: string }) => void;
   isLoading: boolean;
 }
 
 export default function MessageInput({ onSendMessage, isLoading }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { selectedModelId } = useSelectedModel();
   
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -24,8 +27,18 @@ export default function MessageInput({ onSendMessage, isLoading }: MessageInputP
     e.preventDefault();
     if (!message.trim() || isLoading) return;
     
-    onSendMessage(message);
+    onSendMessage({ content: message, modelId: selectedModelId });
     setMessage("");
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 当按下Ctrl+Enter或Command+Enter时提交表单
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      if (message.trim() && !isLoading) {
+        handleSubmit(e);
+      }
+    }
   };
   
   return (
@@ -38,10 +51,10 @@ export default function MessageInput({ onSendMessage, isLoading }: MessageInputP
               ref={textareaRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
               className="w-full border border-border rounded-lg pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-              placeholder="How can I help you today?"
+              placeholder="输入消息，或按 Ctrl+Enter 发送..."
               rows={1}
-              maxRows={5}
               disabled={isLoading}
             />
             
@@ -63,14 +76,7 @@ export default function MessageInput({ onSendMessage, isLoading }: MessageInputP
           <div className="flex items-center text-xs text-gray-500 mt-2">
             <div className="flex items-center justify-center">
               <div className="flex mr-4 items-center">
-                <span>AI: 1.7 Sonnet</span>
-                <span className="mx-2">|</span>
-                <button type="button" className="text-gray-500 hover:text-gray-700 flex items-center">
-                  <span>Choose style</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
+                <ModelSelector />
               </div>
             </div>
             
@@ -78,16 +84,16 @@ export default function MessageInput({ onSendMessage, isLoading }: MessageInputP
             
             <div className="flex items-center">
               <div className="text-gray-500 hidden sm:block">
-                Collaborate with AI using documents, images, and more
+                支持文档、图片等多种文件类型
               </div>
               <div className="flex items-center ml-2">
-                <button type="button" className="p-1 text-gray-400 hover:text-gray-600" title="Upload files">
+                <button type="button" className="p-1 text-gray-400 hover:text-gray-600" title="上传文件">
                   <PaperclipIcon className="h-5 w-5" />
                 </button>
-                <button type="button" className="p-1 text-gray-400 hover:text-gray-600 ml-1" title="Insert image">
+                <button type="button" className="p-1 text-gray-400 hover:text-gray-600 ml-1" title="插入图片">
                   <ImageIcon className="h-5 w-5" />
                 </button>
-                <button type="button" className="p-1 text-gray-400 hover:text-gray-600 ml-1" title="Format text">
+                <button type="button" className="p-1 text-gray-400 hover:text-gray-600 ml-1" title="格式化文本">
                   <FileTextIcon className="h-5 w-5" />
                 </button>
               </div>

@@ -51,11 +51,11 @@ export default function Home() {
   // Send message handler
   const sendMessageMutation = useSendMessage(chatId || 0);
   
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async ({ content, modelId }: { content: string; modelId?: string }) => {
     if (!content.trim() || !chatId) return;
     
     try {
-      await sendMessageMutation.mutateAsync(content);
+      await sendMessageMutation.mutateAsync({ content, modelId });
     } catch (error) {
       console.error("Failed to send message:", error);
     }

@@ -10,12 +10,23 @@ export interface Chat {
   createdAt: Date;
 }
 
+export interface Model {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface Message {
   id: number;
   chatId: number;
   content: string;
   isUser: boolean;
   createdAt: Date;
+  metadata?: string;
+  model?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface FeatureCard {
