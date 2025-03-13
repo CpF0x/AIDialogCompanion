@@ -1,24 +1,24 @@
 import axios from 'axios';
 
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+// 火山引擎 DeepSeek API 地址
+const VOLCENGINE_DEEPSEEK_API_URL = 'https://opensearch-service-cn-beijing.volces.com/model-serving/v2/openapi/engines/deepseek-chat/chat-completions';
 
 interface DeepSeekMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
 }
 
-interface DeepSeekCompletionParams {
+interface VolcengineDeepSeekCompletionParams {
   messages: DeepSeekMessage[];
-  model: string;
-  temperature?: number;
   max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  stream?: boolean;
 }
 
-interface DeepSeekResponse {
+interface VolcengineDeepSeekResponse {
   id: string;
-  object: string;
   created: number;
-  model: string;
   choices: {
     index: number;
     message: DeepSeekMessage;
@@ -32,7 +32,7 @@ interface DeepSeekResponse {
 }
 
 /**
- * 使用 DeepSeek API 生成回复
+ * 使用火山引擎的 DeepSeek API 生成回复
  * @param userMessage 用户消息
  * @returns 生成的回复文本
  */
@@ -41,12 +41,11 @@ export async function generateDeepSeekResponse(userMessage: string): Promise<str
     const apiKey = process.env.DEEPSEEK_API_KEY;
     
     if (!apiKey) {
-      console.error('DeepSeek API 密钥缺失。请设置 DEEPSEEK_API_KEY 环境变量。');
+      console.error('火山引擎 DeepSeek API 密钥缺失。请设置 DEEPSEEK_API_KEY 环境变量。');
       return "抱歉，AI 服务目前无法使用。请稍后再试。";
     }
 
-    const params: DeepSeekCompletionParams = {
-      model: "deepseek-chat", // 使用 DeepSeek 的聊天模型
+    const params: VolcengineDeepSeekCompletionParams = {
       messages: [
         { 
           role: "system", 
@@ -58,11 +57,13 @@ export async function generateDeepSeekResponse(userMessage: string): Promise<str
         }
       ],
       temperature: 0.7,
-      max_tokens: 2000
+      max_tokens: 2000,
+      top_p: 0.95,
+      stream: false
     };
 
-    const response = await axios.post<DeepSeekResponse>(
-      DEEPSEEK_API_URL,
+    const response = await axios.post<VolcengineDeepSeekResponse>(
+      VOLCENGINE_DEEPSEEK_API_URL,
       params,
       {
         headers: {
@@ -75,7 +76,7 @@ export async function generateDeepSeekResponse(userMessage: string): Promise<str
     // 返回 AI 助手的回复内容
     return response.data.choices[0].message.content;
   } catch (error) {
-    console.error('DeepSeek API 调用失败:', error);
+    console.error('火山引擎 DeepSeek API 调用失败:', error);
     
     if (axios.isAxiosError(error)) {
       console.error('错误详情:', error.response?.data);
