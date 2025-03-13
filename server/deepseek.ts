@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // 火山引擎 DeepSeek API 地址
-const VOLCENGINE_DEEPSEEK_API_URL = 'https://opensearch-service-cn-beijing.volces.com/model-serving/v2/openapi/engines/deepseek-chat/chat-completions';
+const VOLCENGINE_DEEPSEEK_API_URL = 'https://universal-engine.volces.com/api/v1/completions';
 
 interface DeepSeekMessage {
   role: 'system' | 'user' | 'assistant';
@@ -9,6 +9,7 @@ interface DeepSeekMessage {
 }
 
 interface VolcengineDeepSeekCompletionParams {
+  model: string;
   messages: DeepSeekMessage[];
   max_tokens?: number;
   temperature?: number;
@@ -18,7 +19,9 @@ interface VolcengineDeepSeekCompletionParams {
 
 interface VolcengineDeepSeekResponse {
   id: string;
+  object: string;
   created: number;
+  model: string;
   choices: {
     index: number;
     message: DeepSeekMessage;
@@ -46,6 +49,7 @@ export async function generateDeepSeekResponse(userMessage: string): Promise<str
     }
 
     const params: VolcengineDeepSeekCompletionParams = {
+      model: "deepseek-chat",
       messages: [
         { 
           role: "system", 
