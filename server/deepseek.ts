@@ -51,7 +51,7 @@ export async function generateDeepSeekResponse(userMessage: string): Promise<str
     }
 
     const params: ArkChatCompletionParams = {
-      model: "deepseek-chat", // 火山方舟的模型名称
+      model: "DeepSeek-V2", // 使用火山方舟支持的模型名称
       messages: [
         { 
           role: "system", 
