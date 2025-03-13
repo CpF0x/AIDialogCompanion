@@ -1,88 +1,38 @@
 import axios from 'axios';
 
-// 火山方舟 API 地址
-const VOLCENGINE_ARK_API_URL = 'https://ark.cn-beijing.volces.com/api/v3';
-
-interface DeepSeekMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-interface ArkChatCompletionParams {
-  model: string;
-  messages: DeepSeekMessage[];
-  temperature?: number;
-  max_tokens?: number;
-  top_p?: number;
-}
-
-interface ArkChatCompletionResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: {
-    message: {
-      role: string;
-      content: string;
-    };
-    finish_reason: string;
-    index: number;
-  }[];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
+// Python API服务的地址
+const PYTHON_API_URL = process.env.PYTHON_API_URL || 'http://localhost:5001';
 
 /**
- * 使用火山方舟 API 生成回复
+ * 使用Python API服务生成回复
  * @param userMessage 用户消息
  * @returns 生成的回复文本
  */
 export async function generateDeepSeekResponse(userMessage: string): Promise<string> {
   try {
-    const apiKey = process.env.DEEPSEEK_API_KEY;
-    
-    if (!apiKey) {
-      console.error('火山方舟 API 密钥缺失。请设置 DEEPSEEK_API_KEY 环境变量。');
-      return "抱歉，AI 服务目前无法使用。请稍后再试。";
+    // 首先检查Python服务是否运行
+    try {
+      await axios.get(`${PYTHON_API_URL}/health`);
+    } catch (healthError) {
+      console.error('Python API服务未运行或无法访问:', healthError);
+      return "抱歉，AI服务当前不可用。请确保Python API服务正在运行。";
     }
 
-    const params: ArkChatCompletionParams = {
-      model: "DeepSeek-V2", // 使用火山方舟支持的模型名称
-      messages: [
-        { 
-          role: "system", 
-          content: "你是一个友好的AI助手，可以提供有帮助、安全、准确的信息。" 
-        },
-        { 
-          role: "user", 
-          content: userMessage 
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-      top_p: 0.95
-    };
-
-    // 使用火山方舟 API
-    const response = await axios.post<ArkChatCompletionResponse>(
-      `${VOLCENGINE_ARK_API_URL}/chat/completions`,
-      params,
+    // 调用Python API服务
+    const response = await axios.post(
+      `${PYTHON_API_URL}/api/chat`,
+      { message: userMessage },
       {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Content-Type': 'application/json'
         }
       }
     );
 
-    // 返回 AI 助手的回复内容
-    return response.data.choices[0].message.content;
+    // 返回AI助手的回复内容
+    return response.data.response;
   } catch (error) {
-    console.error('火山方舟 API 调用失败:', error);
+    console.error('调用Python API服务失败:', error);
     
     if (axios.isAxiosError(error)) {
       console.error('错误详情:', error.response?.data);
