@@ -49,13 +49,14 @@ export default function Home() {
   }, [chatId, chats, setLocation]);
   
   // Send message handler
-  const sendMessageMutation = useSendMessage(chatId || 0);
+  const { sendMessageMutation, streamingMessage } = useSendMessage(chatId || 0);
   
   const handleSendMessage = async ({ content, modelId }: { content: string; modelId?: string }) => {
     if (!content.trim() || !chatId) return;
     
     try {
-      await sendMessageMutation.mutateAsync({ content, modelId });
+      // 使用流式输出
+      await sendMessageMutation.mutateAsync({ content, modelId, stream: true });
     } catch (error) {
       console.error("Failed to send message:", error);
     }
@@ -108,6 +109,7 @@ export default function Home() {
           featureCards={featureCards}
           recentChats={chats.slice(0, 3)}
           greeting={getGreeting()}
+          streamingMessage={streamingMessage}
         />
         
         {/* Message Input */}

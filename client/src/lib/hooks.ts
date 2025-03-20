@@ -56,20 +56,127 @@ export function useCreateChat() {
 
 // Hook for sending messages
 export function useSendMessage(chatId: number) {
+  const [streamingMessage, setStreamingMessage] = useState<{ id: number; content: string } | null>(null);
+  
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ content, modelId }: { content: string; modelId?: string }) => {
-      const response = await apiRequest("POST", `/api/chats/${chatId}/messages`, {
-        content,
-        modelId
-      });
-      return response.json();
+    mutationFn: async ({ content, modelId, stream = false }: { content: string; modelId?: string; stream?: boolean }) => {
+      if (stream) {
+        // 使用流式输出
+        const response = await apiRequest("POST", `/api/chats/${chatId}/messages`, {
+          content,
+          modelId,
+          stream: true
+        }, { noJson: true });
+        
+        // 创建事件源
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        
+        if (!reader) {
+          throw new Error('无法创建流式响应读取器');
+        }
+        
+        let aiMessageId: number | null = null;
+        
+        // 处理流式响应
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+              
+              try {
+                const parsedData = JSON.parse(data);
+                
+                if (parsedData.type === 'init') {
+                  // 初始化消息
+                  aiMessageId = parsedData.aiMessageId;
+                  setStreamingMessage({ id: aiMessageId, content: '' });
+                  
+                  // 立即更新查询缓存，添加用户消息
+                  queryClient.setQueryData(
+                    [`/api/chats/${chatId}/messages`],
+                    (oldData: any) => {
+                      if (!oldData) return [parsedData.userMessage];
+                      return [...oldData, parsedData.userMessage];
+                    }
+                  );
+                } else if (parsedData.type === 'update' && aiMessageId) {
+                  // 更新流式内容
+                  setStreamingMessage(prev => {
+                    if (!prev) return { id: aiMessageId!, content: parsedData.content };
+                    return { id: prev.id, content: prev.content + parsedData.content };
+                  });
+                  
+                  // 更新查询缓存中的AI消息
+                  queryClient.setQueryData(
+                    [`/api/chats/${chatId}/messages`],
+                    (oldData: any) => {
+                      if (!oldData) return [];
+                      
+                      const newData = [...oldData];
+                      const aiMessageIndex = newData.findIndex(msg => msg.id === aiMessageId);
+                      
+                      if (aiMessageIndex === -1) {
+                        // 如果AI消息不存在，添加它
+                        newData.push({
+                          id: aiMessageId,
+                          chatId,
+                          content: streamingMessage?.content || '' + parsedData.content,
+                          isUser: false,
+                          createdAt: new Date(),
+                          model: parsedData.model
+                        });
+                      } else {
+                        // 更新现有AI消息
+                        newData[aiMessageIndex] = {
+                          ...newData[aiMessageIndex],
+                          content: streamingMessage?.content || '',
+                          model: parsedData.model
+                        };
+                      }
+                      
+                      return newData;
+                    }
+                  );
+                } else if (parsedData.type === 'done') {
+                  // 流式响应结束，清理状态
+                  setStreamingMessage(null);
+                  
+                  // 刷新消息列表
+                  queryClient.invalidateQueries({ queryKey: [`/api/chats/${chatId}/messages`] });
+                }
+              } catch (e) {
+                console.error('解析流式数据失败:', e, data);
+              }
+            }
+          }
+        }
+        
+        return { success: true };
+      } else {
+        // 非流式输出，使用原有的处理方式
+        const response = await apiRequest("POST", `/api/chats/${chatId}/messages`, {
+          content,
+          modelId
+        });
+        return response.json();
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/chats/${chatId}/messages`] });
+      // 非流式输出时刷新消息列表
+      if (!streamingMessage) {
+        queryClient.invalidateQueries({ queryKey: [`/api/chats/${chatId}/messages`] });
+      }
     },
   });
   
-  return sendMessageMutation;
+  return { sendMessageMutation, streamingMessage };
 }
 
 // Hook for getting formatted time ago

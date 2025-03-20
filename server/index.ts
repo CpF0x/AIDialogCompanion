@@ -2,6 +2,10 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startPythonApiService } from "./python-service";
+import { initDatabase } from "../shared/db"; // 导入数据库初始化函数
+
+// 初始化SQLite数据库
+initDatabase();
 
 const app = express();
 app.use(express.json());

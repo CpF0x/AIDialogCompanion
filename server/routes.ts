@@ -3,11 +3,182 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertChatSchema, insertMessageSchema, MessageWithModel } from "@shared/schema";
 import { generateDeepSeekResponse, getAvailableModels } from "./deepseek";
+import { WebSocketServer, WebSocket } from 'ws';
+import axios from 'axios';
+import url from 'url';
+
+// 定义流式响应类型
+interface StreamChatResponse {
+  content: string;
+  model?: {
+    id: string;
+    name: string;
+  };
+}
+
+// 定义普通响应类型
+interface ChatResponse {
+  content: string;
+  model?: {
+    id: string;
+    name: string;
+  };
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // 创建HTTP服务器
+  const server = createServer(app);
+  
+  // 创建WebSocket服务器
+  const wss = new WebSocketServer({ 
+    server, 
+    path: '/ws' // 指定WebSocket路径为/ws
+  });
+  
+  console.log('WebSocket服务器已启动，路径: /ws');
+  
+  // 存储活跃连接
+  const clients = new Map<string, WebSocket>();
+  
+  // WebSocket处理
+  wss.on('connection', (ws: WebSocket, req: Request) => {
+    console.log('WebSocket连接建立');
+    
+    // 使用查询参数或cookie获取用户ID
+    const parsedUrl = url.parse(req.url || '', true);
+    const userId = parsedUrl.query.userId as string;
+    
+    if (!userId) {
+      console.log('未提供用户ID，关闭连接');
+      ws.close();
+      return;
+    }
+    
+    // 存储客户端连接
+    clients.set(userId, ws);
+    console.log(`用户 ${userId} 的WebSocket连接已注册`);
+    
+    // 如果用户已订阅新闻，将WebSocket客户端注册到后端服务
+    try {
+      axios.post('http://localhost:5001/api/register-client', { 
+        user_id: userId 
+      }).then(() => {
+        console.log(`用户 ${userId} 的WebSocket客户端已注册到Python服务`);
+      }).catch(error => {
+        console.error(`注册WebSocket客户端失败: ${error.message}`);
+      });
+    } catch (error) {
+      console.error(`注册WebSocket客户端失败: ${error}`);
+    }
+    
+    // 处理客户端消息
+    ws.on('message', (message: Buffer) => {
+      const msgString = message.toString();
+      console.log(`收到客户端消息: ${msgString}`);
+      
+      try {
+        const data = JSON.parse(msgString);
+        
+        // 处理订阅新闻请求
+        if (data.type === 'subscribe_news') {
+          axios.post('http://localhost:5001/api/subscribe-news', {
+            user_id: userId
+          }).then(response => {
+            const result = response.data;
+            ws.send(JSON.stringify({
+              type: 'news_subscription',
+              status: 'success',
+              message: result.message,
+              next_update: result.next_update
+            }));
+          }).catch(error => {
+            ws.send(JSON.stringify({
+              type: 'news_subscription',
+              status: 'error',
+              message: error.message
+            }));
+          });
+        }
+        
+        // 处理取消订阅新闻请求
+        else if (data.type === 'unsubscribe_news') {
+          axios.post('http://localhost:5001/api/unsubscribe-news', {
+            user_id: userId
+          }).then(response => {
+            const result = response.data;
+            ws.send(JSON.stringify({
+              type: 'news_unsubscription',
+              status: 'success',
+              message: result.message
+            }));
+          }).catch(error => {
+            ws.send(JSON.stringify({
+              type: 'news_unsubscription',
+              status: 'error',
+              message: error.message
+            }));
+          });
+        }
+      } catch (error) {
+        console.error(`处理WebSocket消息失败: ${error}`);
+      }
+    });
+    
+    // 处理连接关闭
+    ws.on('close', () => {
+      console.log(`用户 ${userId} 的WebSocket连接已关闭`);
+      clients.delete(userId);
+      
+      // 通知Python服务客户端已断开连接
+      try {
+        axios.post('http://localhost:5001/api/unregister-client', { 
+          user_id: userId 
+        }).catch(error => {
+          console.error(`注销WebSocket客户端失败: ${error.message}`);
+        });
+      } catch (error) {
+        console.error(`注销WebSocket客户端失败: ${error}`);
+      }
+    });
+    
+    // 发送初始连接确认消息
+    ws.send(JSON.stringify({ type: 'connection', status: 'connected', userId }));
+  });
+
   // API routes
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+  
+  // 添加广播新闻API
+  app.post("/api/broadcast-news", async (req, res) => {
+    try {
+      const { user_ids, message } = req.body;
+      console.log(`广播新闻消息到用户: ${user_ids.join(", ")}`);
+      
+      if (!user_ids || !Array.isArray(user_ids) || !message) {
+        return res.status(400).json({ error: "无效的请求参数" });
+      }
+      
+      let sentCount = 0;
+      
+      // 向指定用户发送消息
+      for (const userId of user_ids) {
+        const client = clients.get(userId.toString());
+        if (client && client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(message));
+          sentCount++;
+        }
+      }
+      
+      res.json({ 
+        status: "success", 
+        message: `已发送消息到${sentCount}个活跃用户` 
+      });
+    } catch (error) {
+      console.error("广播消息失败:", error);
+      res.status(500).json({ error: "广播消息失败" });
+    }
   });
   
   // 模型API
@@ -16,6 +187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const models = await getAvailableModels();
       res.json(models);
     } catch (error) {
+      console.error("获取模型出错:", error);
       res.status(500).json({ error: "Failed to fetch AI models" });
     }
   });
@@ -26,6 +198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cards = await storage.getFeatureCards();
       res.json(cards);
     } catch (error) {
+      console.error("获取功能卡片出错:", error);
       res.status(500).json({ error: "Failed to fetch feature cards" });
     }
   });
@@ -35,9 +208,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // For demo purposes, we're using userId 1
       const userId = 1;
+      
+      // 确保用户存在
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({ username: "demo_user", password: "password" });
+        console.log("自动创建了演示用户:", user);
+      }
+      
       const chats = await storage.getChatsByUserId(userId);
       res.json(chats);
     } catch (error) {
+      console.error("获取聊天记录出错:", error);
       res.status(500).json({ error: "Failed to fetch chats" });
     }
   });
@@ -46,16 +228,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // For demo purposes, we're using userId 1
       const userId = 1;
+      
+      // 确保用户存在
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({ username: "demo_user", password: "password" });
+        console.log("自动创建了演示用户:", user);
+      }
+      
+      console.log("创建聊天请求数据:", req.body);
       const result = insertChatSchema.safeParse({ ...req.body, userId });
       
       if (!result.success) {
-        return res.status(400).json({ error: "Invalid chat data" });
+        console.error("聊天数据验证失败:", result.error);
+        return res.status(400).json({ error: "Invalid chat data", details: result.error.format() });
       }
       
+      console.log("准备创建聊天:", result.data);
       const chat = await storage.createChat(result.data);
+      console.log("聊天创建成功:", chat);
       res.status(201).json(chat);
     } catch (error) {
-      res.status(500).json({ error: "Failed to create chat" });
+      console.error("创建聊天出错:", error);
+      res.status(500).json({ error: "Failed to create chat", details: String(error) });
     }
   });
   
@@ -116,7 +311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid chat ID" });
       }
       
-      const { content, modelId } = req.body;
+      const { content, modelId, stream } = req.body;
       
       if (!content) {
         return res.status(400).json({ error: "Content is required" });
@@ -126,45 +321,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userMessage = await storage.createMessage({
         chatId,
         content,
-        isUser: true
+        isUser: 1 // 使用整数代替布尔值
       });
       
-      try {
-        // 使用选定的模型生成AI回复
-        const aiResponse = await generateDeepSeekResponse(content, modelId);
+      // 如果是流式输出
+      if (stream) {
+        // 设置响应头，支持SSE
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // 禁用Nginx缓冲
         
-        // 保存AI回复消息，包含模型信息
-        const aiMessage = await storage.createMessage({
-          chatId,
-          content: aiResponse.response,
-          isUser: false,
-          metadata: JSON.stringify({ model: aiResponse.model })
-        });
-        
-        res.status(201).json({ 
-          userMessage, 
-          aiMessage: {
-            ...aiMessage,
-            model: aiResponse.model
+        try {
+          // 使用选定的模型生成流式AI回复
+          const streamResponse = await generateDeepSeekResponse(content, modelId, true) as ReadableStream<StreamChatResponse>;
+          
+          // 创建一个空的AI消息，后续会更新内容
+          const aiMessage = await storage.createMessage({
+            chatId,
+            content: "", // 初始为空
+            isUser: 0, // 使用整数代替布尔值
+            metadata: JSON.stringify({ model: { id: modelId || "unknown", name: "处理中..." } })
+          });
+          
+          // 发送用户消息和初始AI消息ID
+          res.write(`data: ${JSON.stringify({ type: 'init', userMessage, aiMessageId: aiMessage.id })}\n\n`);
+          
+          // 用于累积完整的AI回复
+          let fullContent = "";
+          let modelInfo = { id: modelId || "unknown", name: "未知模型" };
+          
+          // 处理流式响应
+          const reader = streamResponse.getReader();
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            if (value) {
+              // 累积内容
+              fullContent += value.content;
+              // 更新模型信息
+              if (value.model) {
+                modelInfo = value.model;
+              }
+              
+              // 发送增量更新
+              res.write(`data: ${JSON.stringify({ type: 'update', content: value.content, model: modelInfo })}\n\n`);
+            }
           }
-        });
-      } catch (error) {
-        console.error('生成 AI 回复时出错:', error);
-        // 即使 AI 回复生成失败，仍然返回用户消息
-        const aiMessage = await storage.createMessage({
-          chatId,
-          content: "抱歉，生成回复时出现问题。请稍后再试。",
-          isUser: false
-        });
-        
-        res.status(201).json({ userMessage, aiMessage });
+          
+          // 更新数据库中的AI消息
+          await storage.updateMessage(aiMessage.id, {
+            content: fullContent,
+            metadata: JSON.stringify({ model: modelInfo })
+          });
+          
+          // 发送完成信号
+          res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+          res.end();
+        } catch (error) {
+          console.error('生成流式 AI 回复时出错:', error);
+          
+          // 发送错误信息
+          res.write(`data: ${JSON.stringify({ type: 'error', message: "生成回复时出现问题。请稍后再试。" })}\n\n`);
+          res.end();
+          
+          // 更新数据库中的AI消息为错误信息
+          const aiMessage = await storage.createMessage({
+            chatId,
+            content: "抱歉，生成回复时出现问题。请稍后再试。",
+            isUser: 0 // 使用整数代替布尔值
+          });
+        }
+      } else {
+        // 非流式输出
+        try {
+          // 使用选定的模型生成AI回复
+          const response = await generateDeepSeekResponse(content, modelId, false);
+          if ('response' in response) {
+            // 创建AI消息
+            const aiMessage = await storage.createMessage({
+              chatId,
+              content: response.response,
+              isUser: 0, // 使用整数代替布尔值
+              metadata: JSON.stringify({ model: response.model })
+            });
+            
+            // 返回用户消息和AI消息
+            res.json({
+              userMessage,
+              aiMessage
+            });
+          } else {
+            throw new Error('Unexpected response type');
+          }
+        } catch (error) {
+          console.error('生成 AI 回复时出错:', error);
+          
+          // 创建错误消息
+          const aiMessage = await storage.createMessage({
+            chatId,
+            content: "抱歉，生成回复时出现问题。请稍后再试。",
+            isUser: 0 // 使用整数代替布尔值
+          });
+          
+          res.json({
+            userMessage,
+            aiMessage
+          });
+        }
       }
     } catch (error) {
-      res.status(500).json({ error: "Failed to create message" });
+      res.status(500).json({ error: "Failed to process message" });
     }
   });
   
-  const httpServer = createServer(app);
-  return httpServer;
+  return server;
 }
 

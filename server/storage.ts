@@ -3,8 +3,10 @@ import {
   type User, type InsertUser,
   type Chat, type InsertChat,
   type Message, type InsertMessage,
-  type FeatureCard, type InsertFeatureCard
+  type FeatureCard, type InsertFeatureCard,
+  toBoolean
 } from "@shared/schema";
+import { SQLiteStorage } from "../shared/sqlite-storage";
 
 export interface IStorage {
   // User methods
@@ -21,6 +23,7 @@ export interface IStorage {
   // Message methods
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesByChatId(chatId: number): Promise<Message[]>;
+  updateMessage(id: number, updates: Partial<Omit<Message, 'id' | 'chatId' | 'createdAt'>>): Promise<Message | undefined>;
   
   // Feature card methods
   getFeatureCards(): Promise<FeatureCard[]>;
@@ -50,9 +53,9 @@ export class MemStorage implements IStorage {
     this.featureCardId = 1;
     
     // Initialize with default feature cards
-    this.createFeatureCard({ title: "Extract insights from report", active: true });
-    this.createFeatureCard({ title: "Polish your prose", active: true });
-    this.createFeatureCard({ title: "Generate interview questions", active: true });
+    this.createFeatureCard({ title: "Extract insights from report", active: 1 });
+    this.createFeatureCard({ title: "Polish your prose", active: 1 });
+    this.createFeatureCard({ title: "Generate interview questions", active: 1 });
   }
   
   // User methods
@@ -76,10 +79,11 @@ export class MemStorage implements IStorage {
   // Chat methods
   async createChat(insertChat: InsertChat): Promise<Chat> {
     const id = this.chatId++;
-    const now = new Date();
+    const now = new Date().toISOString(); // 使用ISO日期字符串
     const chat: Chat = { 
-      ...insertChat, 
       id,
+      userId: insertChat.userId || null,
+      title: insertChat.title || 'New chat',
       createdAt: now
     };
     this.chats.set(id, chat);
@@ -89,7 +93,11 @@ export class MemStorage implements IStorage {
   async getChatsByUserId(userId: number): Promise<Chat[]> {
     return Array.from(this.chats.values())
       .filter(chat => chat.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .sort((a, b) => {
+        const timeA = new Date(a.createdAt || '').getTime();
+        const timeB = new Date(b.createdAt || '').getTime();
+        return timeB - timeA;
+      });
   }
   
   async getChatById(id: number): Promise<Chat | undefined> {
@@ -102,26 +110,33 @@ export class MemStorage implements IStorage {
     
     const updatedChat: Chat = { ...chat, title };
     this.chats.set(id, updatedChat);
+    
     return updatedChat;
   }
   
   // Message methods
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
     const id = this.messageId++;
-    const now = new Date();
+    const now = new Date().toISOString(); // 使用ISO日期字符串
+    // 处理布尔值
+    const isUser = insertMessage.isUser === undefined ? 1 : (insertMessage.isUser ? 1 : 0);
+    
     const message: Message = {
-      ...insertMessage,
       id,
+      chatId: insertMessage.chatId || null,
+      content: insertMessage.content,
+      isUser: isUser,
+      metadata: insertMessage.metadata || null,
       createdAt: now
     };
     this.messages.set(id, message);
     
     // Update chat title based on first user message
-    if (insertMessage.isUser) {
-      const chatMessages = await this.getMessagesByChatId(insertMessage.chatId);
+    if (toBoolean(isUser) && message.chatId) {
+      const chatMessages = await this.getMessagesByChatId(message.chatId);
       if (chatMessages.length === 1) {
-        const titlePreview = insertMessage.content.substring(0, 50);
-        await this.updateChatTitle(insertMessage.chatId, titlePreview);
+        const titlePreview = message.content.substring(0, 50);
+        await this.updateChatTitle(message.chatId, titlePreview);
       }
     }
     
@@ -131,7 +146,27 @@ export class MemStorage implements IStorage {
   async getMessagesByChatId(chatId: number): Promise<Message[]> {
     return Array.from(this.messages.values())
       .filter(message => message.chatId === chatId)
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      .sort((a, b) => {
+        const timeA = new Date(a.createdAt || '').getTime();
+        const timeB = new Date(b.createdAt || '').getTime();
+        return timeA - timeB;
+      });
+  }
+  
+  async updateMessage(id: number, updates: Partial<Omit<Message, 'id' | 'chatId' | 'createdAt'>>): Promise<Message | undefined> {
+    const message = this.messages.get(id);
+    if (!message) return undefined;
+    
+    // 处理布尔值
+    const processedUpdates = {...updates};
+    if (updates.isUser !== undefined) {
+      processedUpdates.isUser = updates.isUser ? 1 : 0;
+    }
+    
+    const updatedMessage: Message = { ...message, ...processedUpdates };
+    this.messages.set(id, updatedMessage);
+    
+    return updatedMessage;
   }
   
   // Feature card methods
@@ -141,10 +176,18 @@ export class MemStorage implements IStorage {
   
   async createFeatureCard(insertCard: InsertFeatureCard): Promise<FeatureCard> {
     const id = this.featureCardId++;
-    const card: FeatureCard = { ...insertCard, id };
+    // 处理布尔值
+    const active = insertCard.active === undefined ? 1 : (typeof insertCard.active === 'boolean' ? (insertCard.active ? 1 : 0) : insertCard.active);
+    
+    const card: FeatureCard = { 
+      title: insertCard.title,
+      active,
+      id 
+    };
     this.featureCards.set(id, card);
+    
     return card;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new SQLiteStorage();

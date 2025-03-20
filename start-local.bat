@@ -1,134 +1,134 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: é¢œè‰²ä»£ç 
+:: ÑÕÉ«´úÂë
 set "GREEN=[92m"
 set "YELLOW=[93m"
 set "BLUE=[94m"
 set "RED=[91m"
 set "RESET=[0m"
 
-:: æ ‡é¢˜
+:: ±êÌâ
 echo.
 echo %BLUE%======================================================%RESET%
-echo %BLUE%              AIèŠå¤©åº”ç”¨æœ¬åœ°å¯åŠ¨è„šæœ¬                %RESET%
+echo %BLUE%              AIÁÄÌìÓ¦ÓÃ±¾µØÆô¶¯½Å±¾                %RESET%
 echo %BLUE%======================================================%RESET%
 echo.
 
-:: æ£€æŸ¥Node.js
-echo %GREEN%æ­£åœ¨æ£€æŸ¥å¿…è¦çš„ä¾èµ–...%RESET%
+:: ¼ì²éNode.js
+echo %GREEN%ÕýÔÚ¼ì²é±ØÒªµÄÒÀÀµ...%RESET%
 where node >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo %RED%é”™è¯¯: æœªæ‰¾åˆ°Node.jsã€‚è¯·å…ˆå®‰è£…Node.jsã€‚%RESET%
-    echo %YELLOW%è¯·è®¿é—® https://nodejs.org/ å®‰è£…Node.js%RESET%
+    echo %RED%´íÎó: Î´ÕÒµ½Node.js¡£ÇëÏÈ°²×°Node.js¡£%RESET%
+    echo %YELLOW%Çë·ÃÎÊ https://nodejs.org/ °²×°Node.js%RESET%
     pause
     exit /b 1
 )
 
 for /f "tokens=*" %%i in ('node -v') do set NODE_VERSION=%%i
-echo %GREEN%âœ“ å·²æ‰¾åˆ°Node.js: %NODE_VERSION%%RESET%
+echo %GREEN%? ÒÑÕÒµ½Node.js: %NODE_VERSION%%RESET%
 
-:: æ£€æŸ¥npm
+:: ¼ì²énpm
 where npm >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo %RED%é”™è¯¯: æœªæ‰¾åˆ°npmã€‚è¯·é‡æ–°å®‰è£…Node.jsã€‚%RESET%
+    echo %RED%´íÎó: Î´ÕÒµ½npm¡£ÇëÖØÐÂ°²×°Node.js¡£%RESET%
     pause
     exit /b 1
 )
 
 for /f "tokens=*" %%i in ('npm -v') do set NPM_VERSION=%%i
-echo %GREEN%âœ“ å·²æ‰¾åˆ°npm: %NPM_VERSION%%RESET%
+echo %GREEN%? ÒÑÕÒµ½npm: %NPM_VERSION%%RESET%
 
-:: æ£€æŸ¥Python
+:: ¼ì²éPython
 where python >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo %RED%é”™è¯¯: æœªæ‰¾åˆ°Pythonã€‚è¯·å®‰è£…Python 3.7+ã€‚%RESET%
-    echo %YELLOW%è®¿é—® https://www.python.org/downloads/ å®‰è£…Python%RESET%
+    echo %RED%´íÎó: Î´ÕÒµ½Python¡£Çë°²×°Python 3.7+¡£%RESET%
+    echo %YELLOW%·ÃÎÊ https://www.python.org/downloads/ °²×°Python%RESET%
     pause
     exit /b 1
 )
 
 for /f "tokens=*" %%i in ('python --version') do set PYTHON_VERSION=%%i
-echo %GREEN%âœ“ å·²æ‰¾åˆ° %PYTHON_VERSION%%RESET%
+echo %GREEN%? ÒÑÕÒµ½ %PYTHON_VERSION%%RESET%
 
-:: æ£€æŸ¥pip
+:: ¼ì²épip
 python -m pip --version >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo %RED%é”™è¯¯: æœªæ‰¾åˆ°pipã€‚è¯·ç¡®ä¿pipå·²å®‰è£…ã€‚%RESET%
-    echo %YELLOW%ä½ å¯ä»¥å°è¯•: 'python -m ensurepip' æˆ–å®‰è£…pip%RESET%
+    echo %RED%´íÎó: Î´ÕÒµ½pip¡£ÇëÈ·±£pipÒÑ°²×°¡£%RESET%
+    echo %YELLOW%Äã¿ÉÒÔ³¢ÊÔ: 'python -m ensurepip' »ò°²×°pip%RESET%
     pause
     exit /b 1
 )
 
 for /f "tokens=1,2" %%i in ('python -m pip --version ^| findstr /C:"pip"') do set PIP_VERSION=%%i %%j
-echo %GREEN%âœ“ å·²æ‰¾åˆ° %PIP_VERSION%%RESET%
+echo %GREEN%? ÒÑÕÒµ½ %PIP_VERSION%%RESET%
 
-:: æ£€æŸ¥APIå¯†é’¥çŽ¯å¢ƒå˜é‡
-echo %GREEN%æ­£åœ¨æ£€æŸ¥APIå¯†é’¥...%RESET%
+:: ¼ì²éAPIÃÜÔ¿»·¾³±äÁ¿
+echo %GREEN%ÕýÔÚ¼ì²éAPIÃÜÔ¿...%RESET%
 set ENV_VAR_SET=true
 
 if "%ARK_API_KEY%"=="" (
     if "%DEEPSEEK_API_KEY%"=="" (
         set ENV_VAR_SET=false
-        echo %YELLOW%è­¦å‘Š: æœªè®¾ç½®APIå¯†é’¥çŽ¯å¢ƒå˜é‡ã€‚AIèŠå¤©åŠŸèƒ½å¯èƒ½æ— æ³•æ­£å¸¸å·¥ä½œã€‚%RESET%
-        echo %YELLOW%è¯·é€šè¿‡ä»¥ä¸‹å‘½ä»¤è®¾ç½®çŽ¯å¢ƒå˜é‡:%RESET%
-        echo %YELLOW%  set ARK_API_KEY=ä½ çš„å¯†é’¥å€¼%RESET%
-        echo %YELLOW%  æˆ–%RESET%
-        echo %YELLOW%  set DEEPSEEK_API_KEY=ä½ çš„å¯†é’¥å€¼%RESET%
+        echo %YELLOW%¾¯¸æ: Î´ÉèÖÃAPIÃÜÔ¿»·¾³±äÁ¿¡£AIÁÄÌì¹¦ÄÜ¿ÉÄÜÎÞ·¨Õý³£¹¤×÷¡£%RESET%
+        echo %YELLOW%ÇëÍ¨¹ýÒÔÏÂÃüÁîÉèÖÃ»·¾³±äÁ¿:%RESET%
+        echo %YELLOW%  set ARK_API_KEY=ÄãµÄÃÜÔ¿Öµ%RESET%
+        echo %YELLOW%  »ò%RESET%
+        echo %YELLOW%  set DEEPSEEK_API_KEY=ÄãµÄÃÜÔ¿Öµ%RESET%
     )
 )
 
 if "%ENV_VAR_SET%"=="false" (
-    echo %YELLOW%è¯·è®¾ç½®å¿…è¦çš„çŽ¯å¢ƒå˜é‡ä»¥å¯ç”¨å®Œæ•´åŠŸèƒ½ã€‚%RESET%
-    echo %YELLOW%å³å°†ç»§ç»­å¯åŠ¨åº”ç”¨ç¨‹åºï¼Œä½†AIèŠå¤©åŠŸèƒ½å¯èƒ½ä¸å¯ç”¨ã€‚%RESET%
+    echo %YELLOW%ÇëÉèÖÃ±ØÒªµÄ»·¾³±äÁ¿ÒÔÆôÓÃÍêÕû¹¦ÄÜ¡£%RESET%
+    echo %YELLOW%¼´½«¼ÌÐøÆô¶¯Ó¦ÓÃ³ÌÐò£¬µ«AIÁÄÌì¹¦ÄÜ¿ÉÄÜ²»¿ÉÓÃ¡£%RESET%
     pause
 )
 
-:: å®‰è£…Pythonä¾èµ–
+:: °²×°PythonÒÀÀµ
 echo.
 echo %BLUE%======================================================%RESET%
-echo %BLUE%                   å®‰è£…Pythonä¾èµ–                 %RESET%
+echo %BLUE%                   °²×°PythonÒÀÀµ                 %RESET%
 echo %BLUE%======================================================%RESET%
 echo.
-echo %GREEN%æ­£åœ¨å®‰è£…Pythonä¾èµ–...%RESET%
+echo %GREEN%ÕýÔÚ°²×°PythonÒÀÀµ...%RESET%
 python -m pip install flask flask-cors requests
 
-:: å®‰è£…Node.jsä¾èµ–
+:: °²×°Node.jsÒÀÀµ
 echo.
 echo %BLUE%======================================================%RESET%
-echo %BLUE%                  å®‰è£…Node.jsä¾èµ–                %RESET%
+echo %BLUE%                  °²×°Node.jsÒÀÀµ                %RESET%
 echo %BLUE%======================================================%RESET%
 echo.
-echo %GREEN%æ­£åœ¨å®‰è£…Node.jsä¾èµ–...%RESET%
+echo %GREEN%ÕýÔÚ°²×°Node.jsÒÀÀµ...%RESET%
 call npm install
 
-:: å¯åŠ¨Python APIæœåŠ¡
+:: Æô¶¯Python API·þÎñ
 echo.
 echo %BLUE%======================================================%RESET%
-echo %BLUE%                  å¯åŠ¨Python APIæœåŠ¡              %RESET%
+echo %BLUE%                  Æô¶¯Python API·þÎñ              %RESET%
 echo %BLUE%======================================================%RESET%
 echo.
-echo %GREEN%æ­£åœ¨æ–°çª—å£ä¸­å¯åŠ¨Python APIæœåŠ¡...%RESET%
-start cmd /k "echo å¯åŠ¨Python APIæœåŠ¡... & python api_service.py"
+echo %GREEN%ÕýÔÚÐÂ´°¿ÚÖÐÆô¶¯Python API·þÎñ...%RESET%
+start cmd /k "echo Æô¶¯Python API·þÎñ... & python api_service.py"
 
-:: ç­‰å¾…PythonæœåŠ¡å¯åŠ¨
-echo %GREEN%ç­‰å¾…Python APIæœåŠ¡å¯åŠ¨... (5ç§’)%RESET%
+:: µÈ´ýPython·þÎñÆô¶¯
+echo %GREEN%µÈ´ýPython API·þÎñÆô¶¯... (5Ãë)%RESET%
 timeout /t 5 /nobreak >nul
 
-:: è®¾ç½®Python API URLçŽ¯å¢ƒå˜é‡
+:: ÉèÖÃPython API URL»·¾³±äÁ¿
 set PYTHON_API_URL=http://localhost:5001
 
-:: å¯åŠ¨Node.jsåº”ç”¨
+:: Æô¶¯Node.jsÓ¦ÓÃ
 echo.
 echo %BLUE%======================================================%RESET%
-echo %BLUE%                     å¯åŠ¨åº”ç”¨                    %RESET%
+echo %BLUE%                     Æô¶¯Ó¦ÓÃ                    %RESET%
 echo %BLUE%======================================================%RESET%
 echo.
-echo %GREEN%å¯åŠ¨AIèŠå¤©åº”ç”¨...%RESET%
-echo %YELLOW%è¯·åœ¨æµè§ˆå™¨ä¸­è®¿é—®: http://localhost:5000%RESET%
-echo %YELLOW%æŒ‰Ctrl+Cç»ˆæ­¢åº”ç”¨%RESET%
+echo %GREEN%Æô¶¯AIÁÄÌìÓ¦ÓÃ...%RESET%
+echo %YELLOW%ÇëÔÚä¯ÀÀÆ÷ÖÐ·ÃÎÊ: http://localhost:5000%RESET%
+echo %YELLOW%°´Ctrl+CÖÕÖ¹Ó¦ÓÃ%RESET%
 
-:: è¿è¡ŒNode.jsåº”ç”¨
+:: ÔËÐÐNode.jsÓ¦ÓÃ
 call npm run dev
 
 endlocal

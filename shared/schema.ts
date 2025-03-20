@@ -1,10 +1,10 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Users table
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
 });
@@ -15,11 +15,11 @@ export const insertUserSchema = createInsertSchema(users).pick({
 });
 
 // Chat (conversation) table
-export const chats = pgTable("chats", {
-  id: serial("id").primaryKey(),
+export const chats = sqliteTable("chats", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("user_id").references(() => users.id),
   title: text("title").notNull().default("New chat"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: text("created_at").default(String(new Date().toISOString())),
 });
 
 export const insertChatSchema = createInsertSchema(chats).pick({
@@ -28,13 +28,13 @@ export const insertChatSchema = createInsertSchema(chats).pick({
 });
 
 // Messages table
-export const messages = pgTable("messages", {
-  id: serial("id").primaryKey(),
+export const messages = sqliteTable("messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   chatId: integer("chat_id").references(() => chats.id),
   content: text("content").notNull(),
-  isUser: boolean("is_user").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  metadata: text("metadata"), // 存储模型信息的JSON字符串
+  isUser: integer("is_user").notNull().default(1),
+  createdAt: text("created_at").default(String(new Date().toISOString())),
+  metadata: text("metadata"),
 });
 
 export const insertMessageSchema = createInsertSchema(messages).pick({
@@ -45,12 +45,12 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
 });
 
 // AI Models
-export const aiModels = pgTable("ai_models", {
-  id: serial("id").primaryKey(),
+export const aiModels = sqliteTable("ai_models", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   modelId: text("model_id").notNull().unique(),
   name: text("name").notNull(),
   description: text("description"),
-  active: boolean("active").notNull().default(true),
+  active: integer("active").notNull().default(1),
 });
 
 export const insertAiModelSchema = createInsertSchema(aiModels).pick({
@@ -61,10 +61,10 @@ export const insertAiModelSchema = createInsertSchema(aiModels).pick({
 });
 
 // Feature cards
-export const featureCards = pgTable("feature_cards", {
-  id: serial("id").primaryKey(),
+export const featureCards = sqliteTable("feature_cards", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   title: text("title").notNull(),
-  active: boolean("active").notNull().default(true),
+  active: integer("active").notNull().default(1),
 });
 
 export const insertFeatureCardSchema = createInsertSchema(featureCards).pick({
@@ -96,4 +96,19 @@ export interface ModelInfo {
 
 export interface MessageWithModel extends Message {
   model?: ModelInfo;
+}
+
+// SQLite中日期处理辅助函数
+export function parseDate(dateStr: string | null): Date {
+  if (!dateStr) return new Date();
+  try {
+    return new Date(dateStr);
+  } catch (e) {
+    return new Date();
+  }
+}
+
+// 布尔值转换辅助函数
+export function toBoolean(value: number | null | undefined): boolean {
+  return value === 1 || value === true;
 }

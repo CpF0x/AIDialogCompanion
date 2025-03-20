@@ -15,16 +15,16 @@ export default function ChatHistory({ chats, selectedChatId }: ChatHistoryProps)
       </div>
     );
   }
-  
+
   return (
     <div className="px-2">
       <h2 className="text-xs uppercase text-gray-400 font-semibold px-2 pt-4 pb-2">Recent</h2>
-      
+
       {chats.map(chat => (
         <Link key={chat.id} href={`/chat/${chat.id}`}>
           <a className={cn(
-            "chat-item hover:bg-gray-100 rounded-lg px-2 py-2 mb-1 cursor-pointer block",
-            selectedChatId === chat.id && "bg-gray-100"
+            "chat-item hover:bg-gray-100 rounded-lg px-3 py-3 mb-2 cursor-pointer block transition-all duration-200 border border-transparent",
+            selectedChatId === chat.id && "bg-white border-gray-200 shadow-sm"
           )}>
             <div className="flex items-start">
               <div className="flex-shrink-0 mt-1">

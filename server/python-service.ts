@@ -79,3 +79,5 @@ export function startPythonApiService() {
     return null;
   }
 }
+
+// 查看Python API服务的配置，确保API服务使用的是端口5001
