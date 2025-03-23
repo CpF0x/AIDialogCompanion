@@ -26,6 +26,13 @@
 - npm (v7+)
 - Python 3.7+
 - 火山方舟API密钥
+- 在项目根目录终端运行以下命令
+- ```
+   npm install
+  ```
+  再运行
+  `pip install -r requirements.txt`
+  
 
 ### 设置API密钥
 
