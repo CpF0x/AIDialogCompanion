@@ -2,7 +2,6 @@
 
 一个基于DeepSeek模型的AI聊天应用，具有简洁的界面、聊天历史记录和推荐问题功能。
 
-![应用截图](attached_assets/image_1741848389367.png)
 
 ## 功能特点
 
@@ -27,11 +26,12 @@
 - Python 3.7+
 - 火山方舟API密钥
 - 在项目根目录终端运行以下命令
-- ```
-   npm install
-  ```
-  再运行
-  `pip install -r requirements.txt`
+- `npm install`
+- 再运行
+- `pip install -r requirements.txt`
+  
+  
+  
   
 
 ### 设置API密钥
