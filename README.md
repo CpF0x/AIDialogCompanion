@@ -106,6 +106,4 @@ chmod +x run-app.sh
 - ✓ 检查Python API服务日志中是否有错误
 - ✓ 验证网络连接是否稳定
 
-## 📄 许可证
 
-本项目采用[MIT许可证](LICENSE)开源
