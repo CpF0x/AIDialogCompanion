@@ -2,7 +2,7 @@
 
 一个基于DeepSeek模型的AI聊天应用，提供简洁界面、聊天历史记录和智能推荐功能。
 
-## ✨ 功能特点
+##  功能特点
 
 - 📝 简洁优雅的用户界面，专注于对话体验
 - 📚 完整的聊天历史记录保存与浏览
@@ -10,13 +10,13 @@
 - 🔄 流畅的实时聊天响应
 - 🌐 强大的DeepSeek-r1模型支持
 
-## 🛠️ 技术栈
+## 🛠 技术栈
 
 - **前端**: React + TypeScript + Tailwind CSS + shadcn/ui
 - **后端**: Node.js + Express + Python Flask
 - **AI模型**: DeepSeek-r1-250120 (通过火山方舟 Ark API)
 
-## 🚀 快速开始
+##  快速开始
 
 ### 前提条件
 
