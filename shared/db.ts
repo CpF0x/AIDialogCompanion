@@ -3,15 +3,23 @@ import Database from 'better-sqlite3';
 import { users, chats, messages, featureCards } from './schema';
 import * as path from 'path';
 import * as fs from 'fs';
+import { fileURLToPath } from 'url';
+import config from '../config/config';
+
+// 在ES模块中获取当前文件路径
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 使用配置文件中的数据库路径
+const dbPath = config.database.path;
 
 // 确保数据目录存在
-const dbDir = path.join(process.cwd(), 'data');
+const dbDir = path.dirname(dbPath);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
 // 连接到SQLite数据库
-const dbPath = path.join(dbDir, 'aidialogsqlite.db');
 const sqlite = new Database(dbPath);
 
 // 初始化Drizzle ORM
@@ -62,4 +70,4 @@ export const initDatabase = () => {
   `);
 
   console.log('Database initialized successfully.');
-}; 
+};

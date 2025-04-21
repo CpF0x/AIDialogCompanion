@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { NewspaperIcon, BellIcon, BellOffIcon } from "lucide-react";
+import { NewspaperIcon, BellIcon, BellOffIcon, Loader2 } from "lucide-react";
 import useWebSocket from '@/lib/useWebSocket';
 import { useUserId } from '@/lib/useUserId';
 import { Input } from "@/components/ui/input";
 
 export default function NewsSubscription() {
-  const [subscribed, setSubscribed] = useState(false);
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
   const [nextUpdate, setNextUpdate] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(true);
   const [newsSummary, setNewsSummary] = useState<string | null>(null);
   const [newsKeyword, setNewsKeyword] = useState<string>('');
   const userId = useUserId();
@@ -20,23 +21,35 @@ export default function NewsSubscription() {
     if (lastMessage) {
       try {
         const data = JSON.parse(lastMessage.data);
-        console.log('收到WebSocket消息:', data);
-        
+        console.log('收到WebSocket消息 [NewsSubscription]:', data);
+
         // 处理连接确认
         if (data.type === 'connection' && data.status === 'connected') {
           // 请求订阅状态信息
+          setStatusLoading(true);
           fetch(`/api/news-status?user_id=${userId}`)
             .then(res => res.json())
             .then(result => {
+              console.log('/api/news-status 返回结果:', result);
               if (result.status === 'success') {
                 setSubscribed(result.subscribed);
                 if (result.subscribed) {
                   setNextUpdate(result.next_update);
                 }
+              } else {
+                console.error('获取新闻订阅状态失败:', result.message);
+                setSubscribed(false);
               }
+            })
+            .catch(error => {
+              console.error('获取新闻订阅状态请求失败:', error);
+              setSubscribed(false);
+            })
+            .finally(() => {
+              setStatusLoading(false);
             });
         }
-        
+
         // 处理订阅响应
         else if (data.type === 'news_subscription') {
           setLoading(false);
@@ -48,7 +61,7 @@ export default function NewsSubscription() {
             alert("订阅失败：" + data.message);
           }
         }
-        
+
         // 处理取消订阅响应
         else if (data.type === 'news_unsubscription') {
           setLoading(false);
@@ -60,14 +73,14 @@ export default function NewsSubscription() {
             alert("取消订阅失败：" + data.message);
           }
         }
-        
+
         // 处理定时新闻消息
         else if (data.type === 'scheduled_news') {
           // 显示新闻总结通知
           alert("每日新闻总结已送达");
           // 保存新闻总结内容
           setNewsSummary(data.content);
-          
+
           // 这里可以更新下一次更新时间
           const nextDay = new Date();
           nextDay.setDate(nextDay.getDate() + 1);
@@ -101,10 +114,10 @@ export default function NewsSubscription() {
       alert("请先订阅新闻服务");
       return;
     }
-    
+
     setLoading(true);
     // 发送测试请求
-    fetch(`http://localhost:5001/api/trigger-news-summary?query=${encodeURIComponent(newsKeyword)}`, {
+    fetch(`/api/trigger-news-summary?query=${encodeURIComponent(newsKeyword)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -139,43 +152,48 @@ export default function NewsSubscription() {
       </CardHeader>
       <CardContent>
         <div className="text-sm">
-          {subscribed ? (
+          {statusLoading ? (
+            <div className="flex items-center text-gray-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <p>正在加载订阅状态...</p>
+            </div>
+          ) : subscribed === true ? (
             <div className="flex items-center text-green-600">
               <BellIcon className="mr-2 h-4 w-4" />
               <p>您已订阅每日新闻总结</p>
             </div>
-          ) : (
+          ) : subscribed === false ? (
             <div className="flex items-center text-gray-500">
               <BellOffIcon className="mr-2 h-4 w-4" />
               <p>您尚未订阅每日新闻总结</p>
             </div>
-          )}
-          
-          {nextUpdate && (
+          ) : null}
+
+          {nextUpdate && subscribed && (
             <p className="mt-2 text-xs text-gray-500">
               下一次更新: {nextUpdate}
             </p>
           )}
-          
+
           <div className="mt-4 flex gap-2">
-            <Input 
+            <Input
               placeholder="输入新闻关键词"
               value={newsKeyword}
               onChange={(e) => setNewsKeyword(e.target.value)}
               className="flex-grow"
             />
-            <Button 
-              onClick={toggleSubscription} 
-              disabled={loading}
+            <Button
+              onClick={toggleSubscription}
+              disabled={loading || statusLoading || subscribed === null}
               variant={subscribed ? "destructive" : "default"}
               size="sm"
             >
               {subscribed ? "取消订阅" : "订阅"}
             </Button>
             {subscribed && (
-              <Button 
-                onClick={testNewsUpdate} 
-                disabled={loading}
+              <Button
+                onClick={testNewsUpdate}
+                disabled={loading || statusLoading}
                 variant="outline"
                 size="sm"
               >
@@ -183,7 +201,7 @@ export default function NewsSubscription() {
               </Button>
             )}
           </div>
-          
+
           {newsSummary && (
             <div className="mt-4 p-3 bg-gray-50 rounded-md border border-gray-200">
               <h3 className="text-sm font-medium mb-2">最新新闻总结:</h3>
@@ -194,4 +212,4 @@ export default function NewsSubscription() {
       </CardContent>
     </Card>
   );
-} 
+}

@@ -8,7 +8,15 @@ from datetime import datetime, timedelta
 import time
 
 app = Flask(__name__)
-CORS(app)  # 允许跨域请求
+
+# 详细的CORS配置
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:5000", "*"],  # 允许的源
+        "methods": ["GET", "POST", "OPTIONS"],  # 允许的方法
+        "allow_headers": ["Content-Type", "Authorization", "X-API-Key"]  # 允许的头部
+    }
+})
 
 # 初始化定时任务调度器
 scheduler = BackgroundScheduler()
@@ -40,28 +48,29 @@ def extract_keywords(message, api_key):
             "temperature": 0.3,
             "max_tokens": 100
         }
-        
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-        
+
         # 调用DeepSeek API
         response = requests.post(
             ARK_API_URL,
             json=payload,
-            headers=headers
+            headers=headers,
+            timeout=60  # 添加60秒超时设置
         )
-        
+
         # 检查响应状态
         response.raise_for_status()
-        
+
         # 解析API响应
         result = response.json()
         keywords = result["choices"][0]["message"]["content"].strip()
-        
+
         print(f"提取的关键词: {keywords}")
-        
+
         # 如果关键词为空，尝试直接使用中文关键词
         if not keywords:
             # 移除"新闻"等通用词
@@ -69,7 +78,7 @@ def extract_keywords(message, api_key):
             # 使用剩余内容作为关键词
             keywords = message.strip()
             print(f"使用原始消息作为关键词: {keywords}")
-            
+
         return keywords
     except Exception as e:
         print(f"提取关键词失败: {e}")
@@ -80,36 +89,36 @@ def get_news_by_keywords(keywords):
     try:
         if not keywords:
             return get_today_news_default()
-            
+
         print(f"使用关键词搜索新闻: {keywords}")
-        
+
         # 尝试使用中文关键词搜索
         news = newsapi.get_everything(q=keywords, language='zh', sort_by='relevancy', page_size=10)
         print(f"中文关键词搜索NewsAPI响应: {news}")
-        
+
         articles = news.get('articles', [])
         print(f"获取到 {len(articles)} 条中文相关新闻")
-        
+
         if not articles:
             # 如果没有找到中文新闻，尝试使用英文关键词搜索
             news = newsapi.get_everything(q=keywords, language='en', sort_by='relevancy', page_size=10)
             articles = news.get('articles', [])
             print(f"获取到 {len(articles)} 条英文相关新闻")
-            
+
         if not articles:
             # 如果仍然没有找到相关新闻，回退到默认新闻
             print("未找到相关新闻，使用默认新闻")
             return get_today_news_default()
-            
+
         news_text = "\n".join([
             f"- {article.get('title', '无标题')}: {article.get('description', '无描述')}"
             for article in articles if article.get('description')
         ])
-        
+
         if not news_text.strip():
             print("新闻内容为空，使用默认新闻")
             return get_today_news_default()
-            
+
         return news_text
     except Exception as e:
         print(f"获取关键词新闻失败: {e}")
@@ -123,7 +132,7 @@ def get_today_news():
         if not api_key:
             print("API密钥未设置，无法提取关键词")
             return get_today_news_default()
-            
+
         # 从用户最近的消息中提取关键词
         # 这里我们使用一个全局变量来存储最近的用户消息
         global latest_user_message
@@ -133,7 +142,7 @@ def get_today_news():
             if keywords:
                 # 使用提取的关键词获取相关新闻
                 return get_news_by_keywords(keywords)
-                
+
         # 如果没有最近的用户消息或提取关键词失败，返回默认新闻
         return get_today_news_default()
     except Exception as e:
@@ -146,27 +155,27 @@ def get_today_news_default():
         # 尝试获取中文新闻
         news = newsapi.get_top_headlines(language='zh', country='cn')
         print(f"NewsAPI 响应: {news}")
-        
+
         articles = news.get('articles', [])
         print(f"获取到 {len(articles)} 条新闻")
-        
+
         if not articles:
             # 如果没有中文新闻，尝试获取全球新闻
             news = newsapi.get_top_headlines(language='en')
             articles = news.get('articles', [])
             print(f"获取到 {len(articles)} 条英文新闻")
-            
+
         if not articles:
             return "获取新闻失败：没有找到任何新闻文章"
-            
+
         news_text = "\n".join([
             f"- {article.get('title', '无标题')}: {article.get('description', '无描述')}"
             for article in articles if article.get('description')
         ])
-        
+
         if not news_text.strip():
             return "获取新闻失败：新闻文章没有有效内容"
-            
+
         return news_text
     except Exception as e:
         print(f"获取新闻失败: {e}")
@@ -222,32 +231,32 @@ def chat():
         api_key = os.environ.get("ARK_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
             return jsonify({"error": "API密钥未设置。请设置ARK_API_KEY环境变量。"}), 500
-        
+
         # 从请求中获取用户消息和模型ID
         data = request.json
         user_message = data.get('message', '')
         model_id = data.get('model_id', DEFAULT_MODEL_ID)
         stream = data.get('stream', False)  # 新增：是否使用流式输出
-        
+
         if not user_message:
             return jsonify({"error": "消息不能为空"}), 400
-            
+
         # 检查模型ID是否有效
         if model_id not in AVAILABLE_MODELS:
             return jsonify({"error": f"无效的模型ID: {model_id}。请使用有效的模型ID。"}), 400
-            
+
         # 获取模型配置
         model_config = AVAILABLE_MODELS[model_id]
-        
+
         # 更新全局变量，存储最近的用户消息
         global latest_user_message
         latest_user_message = user_message
-        
+
         # 检查是否是新闻相关查询
-        news_keywords = ["新闻", "大事", "发生了什么", "今天新闻", "最近新闻", "时事", "热点", 
+        news_keywords = ["新闻", "大事", "发生了什么", "今天新闻", "最近新闻", "时事", "热点",
                 "今日头条", "最新消息", "新闻摘要", "今日要闻", "新闻播报"]
         is_news_query = any(keyword in user_message.lower() for keyword in news_keywords)
-        
+
         system_message = "你是一个友好的AI助手，可以提供有帮助、安全、准确的信息。"
         if is_news_query:
             # 获取新闻内容
@@ -261,7 +270,7 @@ def chat():
                 system_message = f"你是娱乐新闻分析助手。请根据以下娱乐相关新闻简要总结今天的重要娱乐事件:\n\n{news}"
             else:
                 system_message = f"你是新闻分析助手。请根据以下新闻简要总结今天的重要事件:\n\n{news}"
-        
+
         # 准备发送到火山方舟API的请求
         payload = {
             "model": model_id,
@@ -280,12 +289,12 @@ def chat():
             "top_p": model_config["top_p"],
             "stream": stream  # 新增：是否使用流式输出
         }
-        
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-        
+
         # 如果是流式输出，使用流式响应
         if stream:
             def generate():
@@ -294,11 +303,12 @@ def chat():
                     ARK_API_URL,
                     json=payload,
                     headers=headers,
-                    stream=True
+                    stream=True,
+                    timeout=60  # 添加60秒超时设置
                 ) as response:
                     # 检查响应状态
                     response.raise_for_status()
-                    
+
                     # 逐行处理流式响应
                     for line in response.iter_lines():
                         if line:
@@ -321,7 +331,7 @@ def chat():
                                             yield "\n\n"
                                     except json.JSONDecodeError:
                                         print(f"无法解析JSON数据: {data}")
-            
+
             # 返回流式响应
             return Response(generate(), mimetype='text/event-stream')
         else:
@@ -329,15 +339,16 @@ def chat():
             response = requests.post(
                 ARK_API_URL,
                 json=payload,
-                headers=headers
+                headers=headers,
+                timeout=60  # 添加60秒超时设置
             )
-            
+
             # 检查响应状态
             response.raise_for_status()
-            
+
             # 解析API响应
             result = response.json()
-            
+
             # 返回AI助手的响应内容
             ai_message = result["choices"][0]["message"]["content"]
             return jsonify({
@@ -347,7 +358,7 @@ def chat():
                     "name": model_config["name"]
                 }
             })
-        
+
     except requests.exceptions.RequestException as e:
         print(f"API请求错误: {e}")
         if hasattr(e, 'response') and e.response is not None:
@@ -369,12 +380,12 @@ def test_news():
     try:
         # 获取查询参数
         query = request.args.get('query', '')
-        
+
         # 如果提供了查询参数，则更新全局变量
         global latest_user_message
         if query:
             latest_user_message = query
-            
+
         news = get_today_news()
         return jsonify({"status": "success", "news": news})
     except Exception as e:
@@ -390,10 +401,10 @@ def register_client():
     try:
         data = request.json
         user_id = data.get('user_id')
-        
+
         if not user_id:
             return jsonify({"status": "error", "message": "用户ID不能为空"}), 400
-            
+
         # 存储连接到Node.js服务器的客户端ID，而不是直接存储客户端对象
         # 我们只记录该用户在Node.js服务器中有活跃连接，实际的WebSocket对象由Node.js管理
         if user_id in news_subscribers:
@@ -409,7 +420,7 @@ def register_client():
                 "subscribed": False  # 标记用户尚未订阅
             }
             print(f"已记录用户 {user_id} 的连接状态，但尚未订阅服务")
-        
+
         return jsonify({"status": "success", "message": "客户端已注册"})
     except Exception as e:
         print(f"注册客户端失败: {e}")
@@ -422,16 +433,16 @@ def unregister_client():
     try:
         data = request.json
         user_id = data.get('user_id')
-        
+
         if not user_id:
             return jsonify({"status": "error", "message": "用户ID不能为空"}), 400
-            
+
         # 检查用户是否已订阅新闻
         if user_id in news_subscribers:
             # 标记该用户没有活跃连接
             news_subscribers[user_id]["has_active_connection"] = False
             print(f"已标记用户 {user_id} 没有活跃连接")
-        
+
         return jsonify({"status": "success", "message": "客户端已注销"})
     except Exception as e:
         print(f"注销客户端失败: {e}")
@@ -442,12 +453,12 @@ def generate_news_summary():
     try:
         # 获取今日新闻
         news_text = get_today_news()
-        
+
         # 生成新闻总结
         api_key = os.environ.get("ARK_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
             return "无法生成新闻总结：API密钥未设置"
-            
+
         # 准备发送到DeepSeek API的请求
         payload = {
             "model": "deepseek-r1-250120",
@@ -460,26 +471,27 @@ def generate_news_summary():
             "temperature": 0.3,
             "max_tokens": 500
         }
-        
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-        
+
         # 调用DeepSeek API
         response = requests.post(
             ARK_API_URL,
             json=payload,
-            headers=headers
+            headers=headers,
+            timeout=60  # 添加60秒超时设置
         )
-        
+
         # 检查响应状态
         response.raise_for_status()
-        
+
         # 解析API响应
         result = response.json()
         summary = result["choices"][0]["message"]["content"].strip()
-        
+
         # 准备要发送的消息
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         message = {
@@ -487,36 +499,36 @@ def generate_news_summary():
             "content": summary,
             "timestamp": current_time
         }
-        
+
         # 发送新闻总结给所有已订阅且有活跃连接的用户
         # 这里我们只通知Node.js服务器发送消息，实际的WebSocket通信由Node.js处理
         try:
             # 获取所有已订阅且有活跃连接的用户ID
             active_subscribers = [
-                user_id 
-                for user_id, info in news_subscribers.items() 
+                user_id
+                for user_id, info in news_subscribers.items()
                 if info.get("subscribed", False) and info.get("has_active_connection", False)
             ]
-            
+
             if active_subscribers:
                 # 使用HTTP请求通知Node.js服务器发送消息
                 notify_payload = {
                     "user_ids": active_subscribers,
                     "message": message
                 }
-                
+
                 # 假设Node.js服务器提供了一个接口用于广播消息
                 broadcast_url = "http://localhost:5000/api/broadcast-news"
                 broadcast_response = requests.post(
                     broadcast_url,
                     json=notify_payload
                 )
-                
+
                 broadcast_response.raise_for_status()
                 print(f"已通知Node.js服务器向{len(active_subscribers)}个用户发送新闻总结")
         except Exception as e:
             print(f"通知Node.js服务器发送消息失败: {e}")
-                
+
         return summary
     except Exception as e:
         print(f"生成新闻总结失败: {e}")
@@ -528,24 +540,24 @@ def subscribe_news():
     try:
         data = request.json
         user_id = data.get('user_id')
-        
+
         if not user_id:
             return jsonify({"status": "error", "message": "用户ID不能为空"}), 400
-            
+
         # 计算下一次发送时间 (24小时后)
         next_update = datetime.now() + timedelta(days=1)
         next_update_str = next_update.strftime("%Y-%m-%d %H:%M:%S")
-        
+
         # 检查是否已经存在此用户
         if user_id in news_subscribers:
             # 如果已经订阅，则返回成功
             if news_subscribers[user_id].get("subscribed", False):
                 return jsonify({
-                    "status": "success", 
+                    "status": "success",
                     "message": "您已经订阅了每日新闻总结",
                     "next_update": news_subscribers[user_id].get("next_update", next_update_str)
                 })
-                
+
             # 更新订阅状态
             news_subscribers[user_id]["subscribed"] = True
             news_subscribers[user_id]["next_update"] = next_update_str
@@ -556,7 +568,7 @@ def subscribe_news():
                 "next_update": next_update_str,
                 "subscribed": True  # 标记用户已订阅
             }
-        
+
         # 如果这是第一个订阅用户，启动定时任务
         has_subscribed_users = any(info.get("subscribed", False) for info in news_subscribers.values())
         if has_subscribed_users:
@@ -572,9 +584,9 @@ def subscribe_news():
                 print("已启动每日新闻总结定时任务")
             except Exception as e:
                 print(f"启动定时任务失败: {e}")
-        
+
         return jsonify({
-            "status": "success", 
+            "status": "success",
             "message": "成功订阅每日新闻总结",
             "next_update": next_update_str
         })
@@ -587,19 +599,19 @@ def unsubscribe_news():
     try:
         data = request.json
         user_id = data.get('user_id')
-        
+
         if not user_id:
             return jsonify({"status": "error", "message": "用户ID不能为空"}), 400
-            
+
         # 检查用户是否已订阅
         if user_id in news_subscribers:
             # 标记为未订阅，但保留连接状态
             news_subscribers[user_id]["subscribed"] = False
             print(f"用户 {user_id} 已取消订阅，但保留连接状态")
-            
+
             # 检查是否还有其他订阅用户
             has_subscribed_users = any(info.get("subscribed", False) for info in news_subscribers.values())
-            
+
             # 如果没有订阅用户了，移除定时任务
             if not has_subscribed_users:
                 try:
@@ -609,9 +621,9 @@ def unsubscribe_news():
                     print(f"移除定时任务失败: {e}")
         else:
             return jsonify({"status": "error", "message": "用户未订阅新闻"}), 404
-        
+
         return jsonify({
-            "status": "success", 
+            "status": "success",
             "message": "成功取消订阅每日新闻总结"
         })
     except Exception as e:
@@ -622,12 +634,12 @@ def get_news_status():
     """获取新闻订阅状态"""
     try:
         user_id = request.args.get('user_id')
-        
+
         if not user_id:
             return jsonify({"status": "error", "message": "用户ID不能为空"}), 400
-            
+
         # 检查是否已订阅
-        if user_id in news_subscribers:
+        if user_id in news_subscribers and news_subscribers[user_id].get("subscribed", False):
             return jsonify({
                 "status": "success",
                 "subscribed": True,
@@ -649,19 +661,19 @@ def trigger_news_summary():
         api_key = request.headers.get('X-API-Key')
         if not api_key or api_key != os.environ.get("ADMIN_API_KEY", "test-key"):
             return jsonify({"status": "error", "message": "未授权访问"}), 401
-            
+
         # 获取查询关键词
         query = request.args.get('query', '')
-        
+
         # 如果提供了查询参数，则更新全局变量
         global latest_user_message
         if query:
             latest_user_message = query
             print(f"已更新最新用户消息为: {query}")
-            
+
         # 生成并发送新闻总结
         summary = generate_news_summary()
-        
+
         return jsonify({
             "status": "success",
             "message": "新闻总结已触发",
@@ -672,5 +684,7 @@ def trigger_news_summary():
 
 # 运行Flask应用
 if __name__ == "__main__":
-    # 使用固定端口5001，确保与前端配置匹配
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    # 从环境变量中获取端口配置，默认使用5001
+    port = int(os.environ.get("PYTHON_API_PORT", 5001))
+    print(f"Python API服务正在端口 {port} 上启动")
+    app.run(debug=True, host="0.0.0.0", port=port)

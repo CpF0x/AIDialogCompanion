@@ -1,8 +1,33 @@
+// 加载环境变量
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+// 在ES模块中获取当前文件路径
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 尝试加载环境变量
+const envPath = path.resolve(__dirname, '../config/.env');
+console.log('Loading environment variables from:', envPath);
+
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+  console.log('Environment variables loaded successfully');
+} else {
+  console.log('Environment file not found, using default values');
+  // 设置默认环境变量
+  process.env.PYTHON_API_URL = 'http://localhost:5001';
+  process.env.PORT = '5000';
+}
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startPythonApiService } from "./python-service";
 import { initDatabase } from "../shared/db"; // 导入数据库初始化函数
+import config from "../config/config"; // 导入配置文件
 
 // 初始化SQLite数据库
 initDatabase();
@@ -64,15 +89,13 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
+  // 使用配置文件中的端口设置
+  const { port, host } = config.server;
   server.listen({
     port,
-    host: "0.0.0.0",
+    host,
     reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    log(`服务器已启动: http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
   });
 })();

@@ -1,7 +1,8 @@
 import axios from 'axios';
+import config from '../config/config';
 
-// Python API服务的地址
-const PYTHON_API_URL = process.env.PYTHON_API_URL || 'http://localhost:5001';
+// 从配置文件中获取Python API服务的地址
+const PYTHON_API_URL = config.pythonApi.url;
 
 export interface Model {
   id: string;
@@ -32,7 +33,7 @@ export interface StreamChatResponse {
  * @returns 包含AI回复及使用的模型信息
  */
 export async function generateDeepSeekResponse(
-  userMessage: string, 
+  userMessage: string,
   modelId?: string,
   stream?: boolean
 ): Promise<ChatResponse | ReadableStream<StreamChatResponse>> {
@@ -53,16 +54,16 @@ export async function generateDeepSeekResponse(
 
     // 准备请求数据
     const requestData: Record<string, any> = { message: userMessage };
-    
+
     // 如果指定了模型ID，则添加到请求中
     if (modelId) {
       requestData.model_id = modelId;
     }
-    
+
     // 如果需要流式输出，则添加到请求中
     if (stream) {
       requestData.stream = true;
-      
+
       // 创建流式响应
       return new ReadableStream<StreamChatResponse>({
         async start(controller) {
@@ -76,39 +77,39 @@ export async function generateDeepSeekResponse(
               },
               body: JSON.stringify(requestData)
             });
-            
+
             if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
+
             if (!response.body) {
               throw new Error('Response body is null');
             }
-            
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-            
+
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
-              
+
               buffer += decoder.decode(value, { stream: true });
-              
+
               // 处理SSE格式的数据
               const lines = buffer.split('\n\n');
               buffer = lines.pop() || '';
-              
+
               for (const line of lines) {
                 if (line.startsWith('data: ')) {
                   const data = line.substring(6);
-                  
+
                   if (data === '[DONE]') {
                     // 流式响应结束
                     controller.close();
                     return;
                   }
-                  
+
                   try {
                     // 解析JSON数据
                     const jsonData = JSON.parse(data);
@@ -119,7 +120,7 @@ export async function generateDeepSeekResponse(
                 }
               }
             }
-            
+
             controller.close();
           } catch (error) {
             console.error('流式请求失败:', error);
@@ -147,15 +148,15 @@ export async function generateDeepSeekResponse(
     }
   } catch (error) {
     console.error('调用Python API服务失败:', error);
-    
+
     if (axios.isAxiosError(error)) {
       console.error('错误详情:', error.response?.data);
     }
-    
+
     if (stream) {
       throw error;
     }
-    
+
     return {
       response: "抱歉，在处理您的请求时发生了错误。请稍后再试。",
       model: { id: "unknown", name: "未知模型" }
@@ -179,16 +180,16 @@ export async function getAvailableModels(): Promise<Model[]> {
 
     // 调用Python API服务获取模型列表
     const response = await axios.get(`${PYTHON_API_URL}/api/models`);
-    
+
     // 返回模型列表
     return response.data;
   } catch (error) {
     console.error('获取模型列表失败:', error);
-    
+
     if (axios.isAxiosError(error)) {
       console.error('错误详情:', error.response?.data);
     }
-    
+
     return [];
   }
 }
